@@ -1,0 +1,337 @@
+<?php
+
+
+function eddy_menu()
+{
+
+    $items['events'] = array(
+    'page callback' => 'eddy_events_page',
+    //'page arguments' => array(t('This menu item was created strictly to allow the hook_menu_alter() function to have something to operate on. hook_menu defined the path as examples/menu_example/menu_original_path. The hook_menu_alter() changes it to examples/menu_example/menu_altered_path. You can try navigating to both paths and see what happens!')),
+    'access callback' => TRUE,
+        );
+    $items['event/%'] = array(
+        'page callback' => 'eddy_event_page',
+        'page arguments' => array(1),
+        'access callback' => TRUE,
+      );
+    $items['stadium/%'] = array(
+        'page callback' => 'eddy_stadium_page',
+        'page arguments' => array(1),
+        'access callback' => TRUE,
+    );
+    $items['stadiums'] = array(
+        'page callback' => 'eddy_stadiums_page',
+        'access callback' => TRUE,
+    );
+    $items['tournaments'] = array(
+        'page callback' => 'eddy_tournaments_page',
+        //'page arguments' => array(t('This menu item was created strictly to allow the hook_menu_alter() function to have something to operate on. hook_menu defined the path as examples/menu_example/menu_original_path. The hook_menu_alter() changes it to examples/menu_example/menu_altered_path. You can try navigating to both paths and see what happens!')),
+        'access callback' => TRUE,
+    );
+    $items['tournament/%'] = array(
+        'page callback' => 'eddy_tournament_page',
+        'page arguments' => array(1),
+        'access callback' => TRUE,
+    );
+
+    return $items;
+}
+
+//Get the events list
+function eddy_events_page(){
+
+    // get events from database
+    $sql = 'SELECT e.event_description, e.event_date, e.event_time, e.event_place,
+                  ett.event_tournament_name,event_tournament_img,  e.event_id, e.stadium_id,
+                  ett.event_tournament_id
+            FROM ex_events e
+            LEFT JOIN ex_event_types et ON e.event_type_id = et.event_type_id
+            LEFT JOIN ex_event_tournament_types ett ON ett.event_tournament_id = e.event_tournament
+            LEFT JOIN stadium_list s ON e.stadium_id = s.stadium_id
+            ORDER BY e.event_date ASC, e.event_time';
+    db_set_active('intco');
+    $events = db_query($sql)->fetchAll();
+    db_set_active();
+
+    // build drupal-table
+    $header = array('title', 'date', 'stadium', 'tournament');
+    $rows = array();
+
+    foreach($events as $event){
+    $rows[] = array(
+            l($event->event_description, 'event/'.$event->event_id),
+            $event->event_date.' '.$event->event_time,
+            l($event->event_place, 'stadium/'.$event->stadium_id),
+            l($event->event_tournament_name, 'tournament/'.$event->event_tournament_id)
+        );
+    }
+    // set title
+    drupal_set_title('Events List');
+    // set breadcrumb
+    $bread = array();
+    $bread[] = l('Home', '<front>');
+    //$bread[] = l('Events', 'events');
+    $bread[] = l('Stadiums', 'stadiums');
+    $bread[] = 'Events List';
+    drupal_set_breadcrumb($bread);
+
+    $output = theme('table', array('header' => $header, 'rows' => $rows));
+
+    //$output .= l('view arsenal vs barcelona', 'event/19987');
+
+    return $output;
+}
+
+//Get the EVENT Description
+function eddy_event_page($event_id = 0){
+    error_reporting(E_ALL | E_STRICT);
+    ini_set('display_errors', 1);
+
+    // Get events list
+    $sql = 'SELECT e.event_description, e.event_date, e.event_time, e.event_place, ett.event_tournament_name
+            FROM ex_events e
+            LEFT JOIN ex_event_types et ON e.event_type_id = et.event_type_id
+            LEFT JOIN ex_event_tournament_types ett ON ett.event_tournament_id = e.event_tournament
+            WHERE e.event_id = :event_id
+            ORDER BY e.event_date ASC, e.event_time';
+
+    //Connect DB wrapper
+    db_set_active('intco');
+    $event = db_query($sql, array(':event_id' => $event_id ))->fetchAll();
+    db_set_active();
+
+    if(!$event && $event <= 0){
+        drupal_set_message('Event does not exist! ', 'error');
+        return drupal_not_found();
+    }
+
+   $rows = array();
+    //search result
+    foreach($event as $e){
+        $rows[] = array(
+            $e->event_description,
+            $e->event_date .' - ' . $e->event_time,
+            $e->event_place,
+            $e->event_tournament_name,
+        );
+    }
+
+   //Set Title
+    drupal_set_title($e->event_description);
+
+    //Set breadcrumbs
+    $bread = array();
+    $bread[] = l('Home', '<front>');
+    $bread[] = l('Events', 'events/');
+    $bread[] = $e->event_description;
+    drupal_set_breadcrumb($bread);
+
+    //Create the header
+    $header = array('EVENT DESCRIPTION', 'EVENT DATE', 'EVENT PLACE', 'TOURNAMENT');
+    //Create the Body output
+    $output = theme('table', array('header'=>$header, 'rows' => $rows, 'empty' => t('No Information Available for this Stadium') ));
+
+    return $output;
+
+
+}
+
+//Get the Stadiums LIST
+function eddy_stadiums_page(){
+
+   // get stadium from database limit 55
+    $sql = 'SELECT sl.name, sl.full_address, sl.image_stadium, sl.image_map, z.zone_name, sl.stadium_id
+            FROM stadium_list sl
+            LEFT JOIN zones z
+            ON sl.city = z.zone_id
+            ORDER BY sl.name ASC LIMIT 55';
+    db_set_active('intco');
+    $stadiums = db_query($sql)->fetchAll();
+    db_set_active();
+
+    // set title
+    drupal_set_title(t('Stadiums'));
+
+    // set breadcrumb
+    $bread = array();
+    $bread[] = l('Home', '<front>');
+    $bread[] = l('Events', 'events');
+    $bread[] = 'Stadiums';
+    drupal_set_breadcrumb($bread);
+
+    // build drupal-table
+    $header = array('Name', 'Address', 'Image', 'Country');
+    $rows = array();
+
+    foreach($stadiums as $stadium){
+    $dir = 'http://www.onlineticketexpress.com/sites/onlineticketexpress.com/files/website_images/tournaments/
+';
+        $rows[] = array(
+             l($stadium->name, 'stadium/'. $stadium->stadium_id),
+             $stadium->full_address,
+             $stadium->image_stadium,
+             $stadium->zone_name,
+
+        );
+    }
+
+    $output = theme('table', array('header' => $header, 'rows' => $rows));
+
+    return $output;
+}
+
+//Get the Stadium Description
+function eddy_stadium_page($stadium_id = 0){
+
+    // check if stadium_id is valid
+    if(!is_numeric($stadium_id) || $stadium_id <= 0){
+        drupal_set_message('Stadium-id not valid! ', 'error');
+        return drupal_not_found();
+    }
+
+    // get stadium
+    db_set_active('intco');
+    $sql = 'SELECT * FROM stadium_list WHERE stadium_id = :stadium_id ';
+    $stadium = db_query($sql, array(':stadium_id' => $stadium_id ))->fetchObject();
+    db_set_active();
+
+    // check if exists stadium
+    if(!$stadium){
+        drupal_set_message('Stadium does not exist! ', 'error');
+        return drupal_not_found();
+    }
+
+    // set title
+    drupal_set_title($stadium->name);
+    // set breadcrumb
+    $bread = array();
+    $bread[] = l('Home', '<front>');
+    $bread[] = l('Events', 'events');
+    $bread[] = l('Stadiums', 'stadiums');
+    $bread[] = $stadium->name;
+    drupal_set_breadcrumb($bread);
+
+    // get events from this stadium
+    $sql = 'SELECT e.event_description, e.event_date, e.event_time, e.event_place,
+                  ett.event_tournament_id, ett.event_tournament_name,event_tournament_img,  e.event_id, e.stadium_id
+            FROM ex_events e
+            LEFT JOIN ex_event_types et ON e.event_type_id = et.event_type_id
+            LEFT JOIN ex_event_tournament_types ett ON ett.event_tournament_id = e.event_tournament
+            WHERE e.stadium_id = :stadium_id
+            ORDER BY e.event_date ASC, e.event_time';
+    db_set_active('intco');
+    $stadium = db_query($sql, array(':stadium_id' => $stadium_id))->fetchAll();
+    db_set_active();
+
+    $rows = array();
+    //search result
+    foreach($stadium as $event){
+        $rows[] = array(
+            $event->event_description,
+            $event->event_date.' '.$event->event_time,
+            l($event->event_tournament_name, 'tournament/'.$event->event_tournament_id ),
+        );
+    }
+
+    //set the header for the table
+    $header = array('Next Games', 'date', 'Tournament');
+    $output = theme('table', array('header' => $header, 'rows' => $rows, 'empty' => t('No Information Available for this Stadium')));
+    return $output;
+
+
+
+}
+
+//Get all tournaments list
+function eddy_tournaments_page()
+{
+
+
+    $sql = 'SELECT eett.event_tournament_name, eett.event_tournament_id, e.event_place
+            FROM ex_event_tournament_types eett
+            LEFT JOIN ex_events e
+            ON e.event_tournament = eett.event_tournament_id
+            ORDER BY eett.event_tournament_name ASC';
+
+    //Get the DB connection from other environment
+    db_set_active('intco');
+    $tournaments = db_query($sql)->fetchAll();
+    db_set_active();
+    // set title
+    drupal_set_title('Tournaments');
+
+    // set breadcrumb
+    $bread = array();
+    $bread[] = l('Home', '<front>');
+    $bread[] = l('Events', 'events');
+    $bread[] = l('Stadiums', 'stadiums');
+    $bread[] = 'Tournaments';
+    drupal_set_breadcrumb($bread);
+
+    //search result
+    foreach($tournaments as $tournament){
+        $rows[] = array(
+            l($tournament->event_tournament_name, 'tournament/'.$tournament->event_tournament_id),
+            $tournament->event_place,
+            //$tournament->event_tournament_description,
+        );
+    }
+    $header = array('Tournament', 'Tournament Place');
+    $output = theme('table', array('header' => $header, 'rows' => $rows));
+
+    //$output .= l('view arsenal vs barcelona', 'event/19987');
+
+    return $output;
+
+}
+
+//Get the Tournament Description
+function eddy_tournament_page($event_tournament_id = 0){
+
+    // check if tournament_id is valid
+    if(!is_numeric($event_tournament_id) || $event_tournament_id <= 0){
+        drupal_set_message('Tournament-id not valid! ', 'error');
+        return drupal_not_found();
+    }
+
+    // get events from this tournament
+    $sql = 'SELECT eett.event_tournament_name,
+       eett.event_tournament_category,
+	   eett.event_tournament_description
+      FROM ex_event_tournament_types eett
+      WHERE eett.event_tournament_id = :event_tournament_id
+      ORDER BY eett.event_tournament_description ASC';
+    db_set_active('intco');
+    $tournaments = db_query($sql, array(':event_tournament_id' => $event_tournament_id))->fetchAll();
+    db_set_active();
+
+    $rows = array();
+    //search result
+    foreach($tournaments as $tournament){
+        $rows[] = array(
+            $tournament->event_tournament_name,
+            $tournament->event_tournament_category,
+            $tournament->event_tournament_description
+        );
+    }
+    // set title
+    drupal_set_title($tournament->event_tournament_name);
+    // set breadcrumb
+    $bread = array();
+    $bread[] = l('Home', '<front>');
+    $bread[] = l('Events', 'events');
+    $bread[] = l('Tournaments', 'tournaments');
+    $bread[] = $tournament->event_tournament_name;
+    drupal_set_breadcrumb($bread);
+
+    //set the header for the table
+    $header = array('Tournament', 'Category', 'Description');
+    $output = theme('table', array('header' => $header, 'rows' => $rows, 'empty' => t('No Information Available for this Stadium')));
+    return $output;
+
+
+
+}
+
+
+
